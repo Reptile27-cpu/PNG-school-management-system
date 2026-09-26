@@ -7,6 +7,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
+    "test:backend": "npm run test --workspace @png-sms/backend",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:migrate": "cd backend && npx prisma migrate dev",
     "db:seed": "cd backend && npx prisma db seed",

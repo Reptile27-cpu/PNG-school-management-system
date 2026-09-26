@@ -20,8 +20,14 @@ import { analyticsRoutes } from './modules/analytics/analytics.routes';
 import { feeRoutes } from './modules/fees/fee.routes';
 import { userRoutes } from './modules/users/user.routes';
 import { healthRouter } from './routes/health';
+import { systemAdminRoutes } from './modules/system-admin/system-admin.routes';
 
 const app = express();
+
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // ==================== Global Middleware ====================
 
@@ -30,7 +36,7 @@ app.use(helmet());
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -61,6 +67,17 @@ const limiter = rateLimit({
   },
 });
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: 'AUTH_RATE_LIMITED', message: 'Too many authentication attempts. Please try again later.' },
+  },
+});
+
 app.use('/api/', limiter);
 
 // ==================== Health Check ====================
@@ -71,7 +88,8 @@ app.use('/api/v1/health', healthRouter);
 
 const API_PREFIX = '/api/v1';
 
-app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/auth`, authLimiter, authRoutes);
+app.use(`${API_PREFIX}/system-admin`, systemAdminRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/schools`, schoolRoutes);
 app.use(`${API_PREFIX}/students`, studentRoutes);

@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://30zpzvcd-4000.inc1.devtunnels.ms/';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -67,11 +67,8 @@ api.interceptors.response.use(
           { withCredentials: true }
         );
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        const { accessToken } = response.data.data;
         localStorage.setItem('accessToken', accessToken);
-        if (newRefreshToken) {
-          localStorage.setItem('refreshToken', newRefreshToken);
-        }
 
         processQueue(null, accessToken);
 

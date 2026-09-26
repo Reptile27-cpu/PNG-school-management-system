@@ -7,6 +7,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/lib/api';
+import { loginWithGoogleSheets, studentDataSource } from '@/lib/student-data';
+
+const isGoogleSheetsMode = studentDataSource === 'google_sheets';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,13 +25,16 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      if (isGoogleSheetsMode && !form.email.includes('@')) {
+        const result = await loginWithGoogleSheets(form.email, form.password);
+        login(result.user, result.accessToken);
+        router.push('/dashboard');
+        return;
+      }
+
       const response = await api.post('/auth/login', form);
 
-      console.log("FULL RESPONSE:", response.data);
-
       const { user, accessToken } = response.data.data;
-
-      console.log("USER BEFORE REDIRECT:", user);
 
       login(user, accessToken);
 
@@ -238,14 +244,14 @@ export default function LoginPage() {
             <div>
 
               <label className="label">
-                Email Address
+                {isGoogleSheetsMode ? 'Student ID' : 'Email Address'}
               </label>
 
 
               <input
-                type="email"
+                type={isGoogleSheetsMode ? 'text' : 'email'}
                 className="input-field"
-                placeholder="you@school.edu.pg"
+                placeholder={isGoogleSheetsMode ? 'ST001' : 'you@school.edu.pg'}
                 value={form.email}
                 onChange={(e)=>setForm({
                   ...form,
@@ -395,13 +401,10 @@ export default function LoginPage() {
 
 
           <p className="mt-8 text-center text-sm">
-
             Don&apos;t have an account?{' '}
-
-            <span className="text-primary">
-              Contact your school administrator
-            </span>
-
+            <Link href="/register" className="text-primary font-semibold">
+              Create one
+            </Link>
           </p>
 
 
@@ -419,6 +422,9 @@ export default function LoginPage() {
 
             <div className="space-y-2 text-xs">
 
+              <p>
+                {isGoogleSheetsMode ? <><strong>Sheets demo:</strong> use the Student ID and password from the sheet.</> : null}
+              </p>
               <p>
                 <strong>Super Admin:</strong> admin@png-sms.com / Admin123!
               </p>

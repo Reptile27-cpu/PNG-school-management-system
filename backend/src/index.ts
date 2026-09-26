@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import app from './app';
 import { logger } from './utils/logger';
@@ -9,9 +11,9 @@ const PORT = process.env.PORT || 4000;
 const startServer = async () => {
   try {
     app.listen(PORT, () => {
-      logger.info(`🚀 PNG School Management System API running on port ${PORT}`);
-      logger.info(`📚 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`🔗 http://localhost:${PORT}/api/v1/health`);
+      logger.info(` PNG School Management System API running on port ${PORT}`);
+      logger.info(` Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(` http://localhost:${PORT}/api/v1/health`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

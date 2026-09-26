@@ -30,12 +30,10 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.tsbuildinfo
 
 # Testing
 coverage/
-
-# Prisma
-backend/prisma/migrations/
 
 # Turbo
 .turbo

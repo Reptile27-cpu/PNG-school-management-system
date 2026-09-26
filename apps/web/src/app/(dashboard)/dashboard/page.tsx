@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -11,8 +11,10 @@ import {
   ArrowUp,
   ArrowDown,
   MoreHorizontal,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { fetchStudentForUser, type Student } from '@/lib/student-data';
 
 // Metric card component
 function MetricCard({
@@ -88,6 +90,29 @@ function ActivityItem({ time, title, description, type }: {
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const [selectedPeriod, setSelectedPeriod] = useState('today');
+  const [student, setStudent] = useState<Student | null>(null);
+  const [isStudentLoading, setIsStudentLoading] = useState(false);
+  const [studentError, setStudentError] = useState('');
+
+  const loadStudent = useCallback(async () => {
+    if (user?.role !== 'student') return;
+
+    setIsStudentLoading(true);
+    setStudentError('');
+
+    try {
+      setStudent(await fetchStudentForUser(user));
+    } catch {
+      setStudent(null);
+      setStudentError('Unable to load your student information from Google Sheets.');
+    } finally {
+      setIsStudentLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void loadStudent();
+  }, [loadStudent]);
 
   return (
     <div className="space-y-6">
@@ -100,6 +125,17 @@ export default function DashboardPage() {
           <p className="text-[var(--text-secondary)]">Here&apos;s what&apos;s happening today</p>
         </div>
         <div className="flex items-center gap-2">
+          {user?.role === 'student' && (
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-2"
+              onClick={() => void loadStudent()}
+              disabled={isStudentLoading}
+            >
+              <RefreshCw className={`w-4 h-4 ${isStudentLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          )}
           {['today', 'week', 'month'].map((period) => (
             <button
               key={period}
@@ -115,6 +151,23 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {user?.role === 'student' && (
+        <div className="card">
+          {studentError ? (
+            <p className="text-sm text-danger" role="alert">{studentError}</p>
+          ) : isStudentLoading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading your student information...</p>
+          ) : student ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div><p className="text-xs text-[var(--text-muted)]">Student ID</p><p className="font-medium">{student.id}</p></div>
+              <div><p className="text-xs text-[var(--text-muted)]">Program / Year</p><p className="font-medium">{student.class || 'Not provided'}</p></div>
+              <div><p className="text-xs text-[var(--text-muted)]">Email</p><p className="font-medium">{student.email || user.email}</p></div>
+              <div><p className="text-xs text-[var(--text-muted)]">Status</p><p className="font-medium capitalize">{student.status}</p></div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

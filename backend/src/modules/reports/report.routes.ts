@@ -1,6 +1,17 @@
 import { Router } from 'express';
-export const reportRoutes = Router();
-reportRoutes.get('/report-cards', (_, res) => res.json({ success: true, data: [] }));
-reportRoutes.post('/report-cards/generate', (_, res) => res.json({ success: true, data: {} }));
-reportRoutes.get('/analytics', (_, res) => res.json({ success: true, data: {} }));
+import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
+import { prisma } from '../../config/database';
+import { authenticate, authorize } from '../../middleware/auth.middleware';
+import { pagination, schoolScope } from '../../utils/route-helpers';
+import { ValidationError } from '../../utils/errors';
 
+export const reportRoutes = Router();
+reportRoutes.use(authenticate);
+const reportInput = z.object({ studentId: z.string().uuid(), termId: z.string().uuid().optional(), academicYearId: z.string().uuid().optional(), teacherRemarks: z.string().max(5000).optional(), principalRemarks: z.string().max(5000).optional(), isPublished: z.boolean().optional() });
+
+reportRoutes.get('/report-cards', authorize('super_admin', 'school_admin', 'teacher', 'student', 'parent'), async (req, res, next) => { try { const schoolId = schoolScope(req); const { page, pageSize, skip, take } = pagination(req); const where = { schoolId, ...(req.user!.role === 'student' ? { student: { userId: req.user!.userId } } : {}), ...(typeof req.query.studentId === 'string' ? { studentId: req.query.studentId } : {}) }; const [data, total] = await prisma.$transaction([prisma.reportCard.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { student: { select: { studentId: true, firstName: true, lastName: true } } } }), prisma.reportCard.count({ where })]); res.json({ success: true, data, meta: { page, pageSize, total } }); } catch (error) { next(error); } });
+
+reportRoutes.post('/report-cards/generate', authorize('super_admin', 'school_admin', 'teacher'), async (req, res, next) => { try { const input = reportInput.parse(req.body); const schoolId = schoolScope(req); const student = await prisma.student.findFirst({ where: { id: input.studentId, schoolId } }); if (!student) throw new ValidationError('Student is outside your school'); const marks = await prisma.mark.findMany({ where: { studentId: student.id, schoolId }, include: { subject: { select: { creditHours: true } } } }); const attendance = await prisma.attendance.findMany({ where: { studentId: student.id, schoolId } }); const totalMarks = marks.reduce((sum, mark) => sum + Number(mark.score), 0); const totalCredits = marks.reduce((sum, mark) => sum + (mark.subject?.creditHours || 0), 0); const attendancePercentage = attendance.length ? (attendance.filter((item) => item.status === 'present' || item.status === 'late').length / attendance.length) * 100 : null; const gpa = marks.length ? marks.reduce((sum, mark) => sum + Number(mark.gradePoint || 0), 0) / marks.length : null; const existing = await prisma.reportCard.findFirst({ where: { studentId: student.id, schoolId, termId: input.termId || null, academicYearId: input.academicYearId || null } }); const data = { totalMarks, totalCredits, gpa, attendancePercentage, teacherRemarks: input.teacherRemarks, principalRemarks: input.principalRemarks, isPublished: input.isPublished || false }; const report = existing ? await prisma.reportCard.update({ where: { id: existing.id }, data }) : await prisma.reportCard.create({ data: { id: uuidv4(), schoolId, studentId: student.id, termId: input.termId, academicYearId: input.academicYearId, ...data } }); res.status(existing ? 200 : 201).json({ success: true, data: report }); } catch (error) { next(error); } });
+
+reportRoutes.get('/analytics', authorize('super_admin', 'school_admin', 'teacher'), async (req, res, next) => { try { const schoolId = schoolScope(req); const [marks, attendance] = await Promise.all([prisma.mark.aggregate({ where: { schoolId }, _avg: { score: true }, _count: { _all: true } }), prisma.attendance.groupBy({ by: ['status'], where: { schoolId }, _count: { _all: true } })]); res.json({ success: true, data: { marks, attendance } }); } catch (error) { next(error); } });

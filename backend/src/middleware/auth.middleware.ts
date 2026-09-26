@@ -10,6 +10,15 @@ export interface JwtPayload {
   email: string;
 }
 
+const getJwtSecret = (name: 'JWT_SECRET' | 'JWT_REFRESH_SECRET', fallback: string): string => {
+  const secret = process.env[name];
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${name} is not configured`);
+  }
+  return fallback;
+};
+
 declare global {
   namespace Express {
     interface Request {
@@ -31,14 +40,21 @@ export const authenticate = async (
     }
 
     const token = authHeader.split(' ')[1];
-    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    const secret = getJwtSecret('JWT_SECRET', 'your-secret-key');
 
     const decoded = jwt.verify(token, secret) as JwtPayload;
 
     // Verify user still exists and is active
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, isActive: true, role: true },
+      select: {
+        id: true,
+        isActive: true,
+        role: true,
+        schoolId: true,
+        email: true,
+        school: { select: { isActive: true } },
+      },
     });
 
     if (!user) {
@@ -49,8 +65,17 @@ export const authenticate = async (
       throw new ForbiddenError('Account has been deactivated');
     }
 
-    req.user = decoded;
-    req.schoolId = decoded.schoolId;
+    if (user.role !== 'super_admin' && user.schoolId && !user.school?.isActive) {
+      throw new ForbiddenError('This school is inactive');
+    }
+
+    req.user = {
+      ...decoded,
+      role: user.role,
+      schoolId: user.schoolId,
+      email: user.email,
+    };
+    req.schoolId = user.schoolId;
     next();
   } catch (error) {
     if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
@@ -83,6 +108,33 @@ export const authorize = (...roles: string[]) => {
   };
 };
 
+export const requireAuth = authenticate;
+export const requireRole = authorize;
+export const requireSystemAdmin = authorize('super_admin');
+
+export const requireSchoolAccess = (paramName = 'schoolId') => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new UnauthorizedError('Authentication required'));
+      return;
+    }
+
+    if (req.user.role === 'super_admin') {
+      next();
+      return;
+    }
+
+    const requestedSchoolId = req.params[paramName] || req.body?.[paramName] || req.query[paramName];
+    if (!req.user.schoolId || (requestedSchoolId && requestedSchoolId !== req.user.schoolId)) {
+      next(new ForbiddenError('You are not authorized to access this school'));
+      return;
+    }
+
+    req.schoolId = req.user.schoolId;
+    next();
+  };
+};
+
 export const optionalAuth = async (
   req: Request,
   _res: Response,
@@ -96,7 +148,7 @@ export const optionalAuth = async (
     }
 
     const token = authHeader.split(' ')[1];
-    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    const secret = getJwtSecret('JWT_SECRET', 'your-secret-key');
     const decoded = jwt.verify(token, secret) as JwtPayload;
     req.user = decoded;
     req.schoolId = decoded.schoolId;

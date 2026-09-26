@@ -1,9 +1,41 @@
+
 import { Request, Response, NextFunction } from 'express';
 import { authService } from './auth.service';
-import { LoginInput, RegisterInput } from './auth.validation';
+import {
+  LoginInput,
+  RegisterInput,
+} from './auth.validation';
 
 export class AuthController {
-  async login(req: Request, res: Response, next: NextFunction) {
+  // ==================== Student Login ====================
+
+  async loginSheetStudent(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await authService.loginSheetStudent(req.body);
+
+      res.json({
+        success: true,
+        data: {
+          user: result.user,
+          accessToken: result.accessToken,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== Login ====================
+
+  async login(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const input: LoginInput = req.body;
       const result = await authService.login(input);
@@ -13,7 +45,7 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/api/v1/auth',
       });
 
@@ -29,7 +61,13 @@ export class AuthController {
     }
   }
 
-  async register(req: Request, res: Response, next: NextFunction) {
+  // ==================== Register ====================
+
+  async register(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const input: RegisterInput = req.body;
       const result = await authService.register(input);
@@ -38,7 +76,8 @@ export class AuthController {
         success: true,
         data: {
           user: result.user,
-          accessToken: result.accessToken,
+          emailVerificationRequired: result.emailVerificationRequired,
+          message: result.message,
         },
       });
     } catch (error) {
@@ -46,10 +85,91 @@ export class AuthController {
     }
   }
 
-  async refreshToken(req: Request, res: Response, next: NextFunction) {
+  // ==================== Send Email OTP ====================
+
+  async sendEmailOtp(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await authService.sendEmailOtp(req.body);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== Verify Email OTP ====================
+
+  async verifyEmailOtp(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await authService.verifyEmailOtp(req.body);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== Password Recovery ====================
+
+  async forgotPassword(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await authService.forgotPassword(req.body);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result = await authService.resetPassword(req.body);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== Refresh Token ====================
+
+  async refreshToken(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const refreshToken =
-        req.body.refreshToken || req.cookies?.refreshToken;
+        req.body.refreshToken ||
+        req.cookies?.refreshToken;
 
       if (!refreshToken) {
         res.status(401).json({
@@ -62,7 +182,8 @@ export class AuthController {
         return;
       }
 
-      const result = await authService.refreshToken(refreshToken);
+      const result =
+        await authService.refreshToken(refreshToken);
 
       // Rotate the refresh token cookie
       res.cookie('refreshToken', result.refreshToken, {
@@ -85,9 +206,16 @@ export class AuthController {
     }
   }
 
-  async logout(req: Request, res: Response, next: NextFunction) {
+  // ==================== Logout ====================
+
+  async logout(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const userId = req.user?.userId;
+
       if (userId) {
         await authService.logout(userId);
       }
@@ -102,17 +230,26 @@ export class AuthController {
 
       res.json({
         success: true,
-        data: { message: 'Logged out successfully' },
+        data: {
+          message: 'Logged out successfully',
+        },
       });
     } catch (error) {
       next(error);
     }
   }
 
-  async getProfile(req: Request, res: Response, next: NextFunction) {
+  // ==================== Get Profile ====================
+
+  async getProfile(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const userId = req.user!.userId;
-      const profile = await authService.getProfile(userId);
+      const profile =
+        await authService.getProfile(userId);
 
       res.json({
         success: true,
@@ -122,7 +259,49 @@ export class AuthController {
       next(error);
     }
   }
+
+  // ==================== Update Profile ====================
+
+  async updateProfile(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = req.user!.userId;
+      const updated = await authService.updateProfile(userId, req.body);
+
+      res.json({
+        success: true,
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==================== Change Password ====================
+
+  async changePassword(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const userId = req.user!.userId;
+      const { currentPassword, newPassword } = req.body;
+      const result = await authService.changePassword(userId, currentPassword, newPassword);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();
+
 

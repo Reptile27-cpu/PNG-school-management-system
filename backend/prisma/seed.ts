@@ -4,8 +4,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 const prisma = new PrismaClient();
 
+const requiredSeedEnv = (name: string): string => {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} must be configured before seeding`);
+  return value;
+};
+
 async function main() {
   console.log('🌱 Seeding database...');
+
+  const superAdminEmail = process.env.SYSTEM_ADMIN_EMAIL || 'admin@png-sms.com';
+  const superAdminPasswordValue = requiredSeedEnv('SYSTEM_ADMIN_PASSWORD');
+  const schoolAdminPasswordValue = requiredSeedEnv('SCHOOL_ADMIN_PASSWORD');
 
   // Clean existing data
   await prisma.auditLog.deleteMany();
@@ -55,12 +65,15 @@ async function main() {
   console.log('✅ Roles seeded');
 
   // ==================== Seed Super Admin ====================
-  const superAdminPassword = await bcrypt.hash('Admin123!', 12);
+  const superAdminPassword = await bcrypt.hash(
+    superAdminPasswordValue,
+    12
+  );
 
   await prisma.user.create({
     data: {
       id: uuidv4(),
-      email: 'admin@png-sms.com',
+      email: superAdminEmail,
       passwordHash: superAdminPassword,
       firstName: 'Super',
       lastName: 'Admin',
@@ -69,7 +82,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Super admin seeded (admin@png-sms.com / Admin123!)');
+  console.log(`✅ Super admin seeded (${superAdminEmail})`);
 
   // ==================== Seed Demo School ====================
   const schoolId = uuidv4();
@@ -93,7 +106,7 @@ async function main() {
   console.log(`✅ Demo school seeded: Port Moresby Demonstration School (${schoolCode})`);
 
   // ==================== Seed School Admin ====================
-  const schoolAdminPassword = await bcrypt.hash('School123!', 12);
+  const schoolAdminPassword = await bcrypt.hash(schoolAdminPasswordValue, 12);
   const schoolAdminId = uuidv4();
 
   await prisma.user.create({

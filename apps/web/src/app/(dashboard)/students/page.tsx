@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -10,27 +10,64 @@ import {
   MoreHorizontal,
   Mail,
   Phone,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { getInitials, generateAvatarColor, getStatusColor } from '@/lib/utils';
-
-// Mock data for demonstration
-const students = Array.from({ length: 25 }, (_, i) => ({
-  id: `PNG-POM-001-2024-${String(i + 1).padStart(4, '0')}`,
-  firstName: ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'][i % 10],
-  lastName: ['Kumar', 'Smith', 'Namo', 'Brown', 'Wilson', 'Davis', 'Miller', 'Garcia', 'Martinez', 'Anderson'][i % 10],
-  class: i < 10 ? 'Grade 9A' : i < 15 ? 'Grade 9B' : i < 20 ? 'Grade 10A' : 'Grade 10B',
-  status: i % 5 === 0 ? 'transferred' : i % 7 === 0 ? 'withdrawn' : 'active',
-  email: `student${i + 1}@school.edu.pg`,
-  phone: `+675 7${String(i).padStart(7, '0')}`,
-  attendance: 85 + Math.floor(Math.random() * 15),
-  gpa: (2.0 + Math.random() * 2.0).toFixed(2),
-}));
+import { createGoogleSheetStudent, fetchStudents, studentDataSource, type Student } from '@/lib/student-data';
 
 export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<{ id: string; password: string } | null>(null);
+  const [newStudent, setNewStudent] = useState({ name: '', email: '', phone: '', program: '', year: '', className: '' });
+
+  const loadStudents = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      setStudents(await fetchStudents());
+    } catch {
+      setStudents([]);
+      setError(
+        studentDataSource === 'google_sheets'
+          ? 'Unable to load student data from Google Sheets. Please check the Google Sheets connection.'
+          : 'Unable to load student data from the database. Please try again.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStudents();
+  }, []);
+
+  const handleCreateStudent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsCreating(true);
+    setCreateError('');
+    setCreatedCredentials(null);
+
+    try {
+      const created = await createGoogleSheetStudent(newStudent);
+      setCreatedCredentials({ id: created.id, password: created.temporaryPassword });
+      setNewStudent({ name: '', email: '', phone: '', program: '', year: '', className: '' });
+      await loadStudents();
+    } catch {
+      setCreateError('Unable to create the student in Google Sheets. Check the required fields and connection.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const filteredStudents = students.filter((student) => {
     const matchesSearch =
@@ -50,11 +87,65 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold">Students</h1>
           <p className="text-[var(--text-secondary)]">Manage all registered students</p>
         </div>
-        <Link href="/students/new" className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Student
-        </Link>
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => void loadStudents()} disabled={isLoading}>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          {studentDataSource === 'google_sheets' ? (
+            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => setIsCreateOpen(!isCreateOpen)}>
+              <Plus className="w-4 h-4" />
+              Add Student
+            </button>
+          ) : (
+            <Link href="/students/new" className="btn-primary flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add Student
+            </Link>
+          )}
+        </div>
       </div>
+
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+
+      {studentDataSource === 'google_sheets' && isCreateOpen && (
+        <form className="card grid gap-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={handleCreateStudent}>
+          {[
+            ['name', 'Name'], ['email', 'Email'], ['phone', 'Phone'],
+            ['program', 'Program'], ['year', 'Year'], ['className', 'Class'],
+          ].map(([field, label]) => (
+            <label key={field} className="label">
+              {label}
+              <input
+                className="input-field mt-1"
+                type={field === 'email' ? 'email' : 'text'}
+                value={newStudent[field as keyof typeof newStudent]}
+                onChange={(event) => setNewStudent({ ...newStudent, [field]: event.target.value })}
+                required={['name', 'email', 'program', 'year'].includes(field)}
+              />
+            </label>
+          ))}
+          <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3">
+            <button type="submit" className="btn-primary" disabled={isCreating}>{isCreating ? 'Creating...' : 'Create Student'}</button>
+            {createError && <p className="text-sm text-danger" role="alert">{createError}</p>}
+          </div>
+          {createdCredentials && (
+            <div className="sm:col-span-2 lg:col-span-3 rounded-lg border border-success/30 bg-success/10 p-4 text-sm">
+              <p className="font-semibold">Student created successfully. Demo credentials:</p>
+              <p>Student ID: <strong>{createdCredentials.id}</strong></p>
+              <p>Temporary Password: <strong>{createdCredentials.password}</strong></p>
+              <button
+                type="button"
+                className="btn-secondary mt-2 text-xs"
+                onClick={() => void navigator.clipboard.writeText(`${createdCredentials.id}\n${createdCredentials.password}`)}
+              >
+                Copy credentials
+              </button>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">DEMO ONLY: the temporary password is stored in the Google Sheet.</p>
+            </div>
+          )}
+        </form>
+      )}
 
       {/* Filters */}
       <div className="card">
@@ -119,7 +210,11 @@ export default function StudentsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map((student, index) => (
+              {isLoading ? (
+                <tr><td colSpan={7} className="py-8 px-4 text-center text-sm text-[var(--text-muted)]">Loading students...</td></tr>
+              ) : filteredStudents.length === 0 ? (
+                <tr><td colSpan={7} className="py-8 px-4 text-center text-sm text-[var(--text-muted)]">No students found.</td></tr>
+              ) : filteredStudents.map((student, index) => (
                 <motion.tr
                   key={student.id}
                   initial={{ opacity: 0, y: 10 }}

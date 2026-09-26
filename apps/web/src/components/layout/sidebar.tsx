@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import Link from 'next/link';
@@ -20,6 +21,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { useSchoolTheme } from '@/components/school-theme-provider';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -28,10 +30,11 @@ interface SidebarProps {
 
 const navItems = {
   super_admin: [
-    { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/admin/schools', label: 'Schools', icon: School },
-    { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-    { href: '/admin/settings', label: 'Settings', icon: Settings },
+    { href: '/system-admin', label: 'System Administration', icon: LayoutDashboard },
+    { href: '/system-admin/schools', label: 'Schools', icon: School },
+    { href: '/system-admin/users', label: 'Users', icon: Users },
+    { href: '/system-admin/audit-logs', label: 'Audit Logs', icon: FileText },
+    { href: '/system-admin/settings', label: 'Settings', icon: Settings },
   ],
   school_admin: [
     { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -74,6 +77,7 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const schoolTheme = useSchoolTheme();
   const role = user?.role || 'student';
   const items = navItems[role] || navItems.student;
 
@@ -92,11 +96,11 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         {!isCollapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-              <GraduationCap className="w-5 h-5 text-white" />
+          <Link href={user?.role === 'super_admin' ? '/system-admin' : '/dashboard'} className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden" style={{ backgroundColor: 'var(--school-primary)' }}>
+              {schoolTheme.logoUrl ? <img src={schoolTheme.logoUrl} alt={`${schoolTheme.schoolName} logo`} className="w-full h-full object-contain" /> : <GraduationCap className="w-5 h-5 text-white" />}
             </div>
-            <span className="font-bold text-sm">PNG-SMS</span>
+            <span className="font-bold text-sm truncate">{user?.role === 'super_admin' ? 'PNG-SMS' : schoolTheme.schoolName}</span>
           </Link>
         )}
         <button

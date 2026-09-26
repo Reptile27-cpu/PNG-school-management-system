@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThemeStore } from '@/stores/theme-store';
+import { SchoolThemeProvider } from '@/components/school-theme-provider';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,7 +41,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeInitializer>
         <AuthInitializer>
-          {children}
+          <SchoolThemeProvider>{children}</SchoolThemeProvider>
         </AuthInitializer>
       </ThemeInitializer>
     </QueryClientProvider>
